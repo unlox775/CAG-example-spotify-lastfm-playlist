@@ -1,0 +1,27 @@
+{
+  "name": "spotify-lastfm-playlist-cag-example",
+  "version": "1.0.0",
+  "description": "Composite Agentic Gate example: Spotify playlist expansion using Last.fm with manual mapping gates.",
+  "main": "src/cli.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration"
+  },
+  "keywords": [
+    "spotify",
+    "lastfm",
+    "agentic-gate",
+    "cag"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0"
+  }
+}
