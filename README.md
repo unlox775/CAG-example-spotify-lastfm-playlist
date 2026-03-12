@@ -1,59 +1,66 @@
 # Spotify Last.fm Explorer Playlist (CAG Example)
 
-This repository is a standalone **Composite Agentic Gate (CAG)** example.
+This is the project where I discovered the **Composite Agentic Gate (CAG)** pattern. It was the first one. I've used the pattern dozens of times since, but this was the aha moment -- and this is the working code.
 
-**What’s a CAG?** A Composite Agentic Gate is a checkpoint where normal code pauses and hands control to an AI agent (or human): the gate gives context, asks for a decision or fix, and tells you exactly how to re-enter the flow. That turns messy, judgment-heavy problems into repeatable pipelines instead of brittle one-shot scripts. **Read more:** [The Compound Agentic Workflow — How AI agents can solve messy real-world problems](https://medium.com/constant-total-amazement/the-compound-agentic-workflow-how-ai-agents-can-solve-messy-real-world-problems-25561e482876).
+**Read more about CAGs:** [The Compound Agentic Workflow -- How AI agents can solve messy real-world problems](https://medium.com/constant-total-amazement/the-compound-agentic-workflow-how-ai-agents-can-solve-messy-real-world-problems-25561e482876).
 
-**About this repo.** This code was extracted from a private monorepo, sanitized, and AI-ported for the sake of showing a CAG example. It may be usable—you’re welcome to use it under the MIT license—but it is not intended (yet) as a ready-to-use, production tool.
+## The Story
 
-This repo creates a Spotify "Explorer" playlist from one of your existing playlists by:
+I had a Spotify playlist I really liked. But playlists have a downside: they lock you into a narrow window of each artist. You hear the same handful of songs and never discover what else those artists have done. I wanted a way to break out of that.
 
-- finding your top artists,
-- pulling each artist's top tracks from Last.fm,
-- mapping those tracks to Spotify,
-- and enforcing a hard stop when mapping is ambiguous.
+The idea was simple. Take a playlist as a seed. Look at which artists are in it and how many songs each one has. Then go find the *next* most popular songs from each of those artists -- the ones just outside the playlist -- and build a new "Explorer" playlist from them, proportionally. If an artist has 8 songs in the seed, they get more slots in the Explorer. If they have 2, they get fewer. The Explorer becomes a way to extend your taste: listen to it, find songs you like, and pull them back into the original playlist. Your horizons expand naturally.
 
-That hard stop is the agentic gate.
+The catch is that Spotify doesn't have great data on what's *actually* popular across all platforms. Last.fm does -- it tracks global listening data and has reliable top-track lists for almost every artist. So the best approach is to use Last.fm's popularity data as the ranking source, then map those tracks back to Spotify for the actual playlist.
 
-## Why This Example Matters
+That's where the problem starts.
 
-Cross-vendor mapping (Last.fm -> Spotify) is inherently fuzzy. Deterministic code can do most of the work, but some cases require judgment.
+## The Problem: Two Worlds That Don't Talk
 
-This project combines both:
+Spotify and Last.fm are completely separate data domains. There is no API that connects them. No shared IDs, no crossover endpoints, no way to say "give me the Last.fm data for this Spotify track" or vice versa. Neither platform has any particular motivation to build that bridge -- they are different products with different data models.
 
-- deterministic pipeline stages for scale and repeatability,
-- a strict agentic gate for ambiguity,
-- explicit mutation instructions,
-- exact rerun command for re-entry.
+As a human, you can do it effortlessly. You can look up "Michael Jackson -- Thriller" on Spotify, then go to Last.fm and find the same song on a top tracks list, and you just *know* they're the same thing. You're bridging two unrelated databases with judgment. That's the fundamental gulf between humans and bots -- and it's exactly the kind of gap that composite agentic gates can bridge.
 
-When the gate triggers, an agent (or you) fixes mappings in data (`mapping.db`) and reruns the same command. The flow continues.
+## Two Impossible Bridges
 
-## CAG Pattern in This Repo
+The goal requires crossing the domain gap **twice**, and each crossing is its own impossible task:
 
-Detailed flow: [docs/AGENTIC-FLOW.md](docs/AGENTIC-FLOW.md)
+**Bridge 1: Spotify to Last.fm.** You have a Spotify playlist with artist names and Spotify IDs. Last.fm has no idea what a Spotify ID is. To find an artist's top tracks on Last.fm, you search by name -- and names don't always match. Spelling variations, special characters, "The" vs no "The." Fuzzy matching handles most of it, but some cases are genuinely ambiguous.
 
-### Gate at a glance
+**Bridge 2: Last.fm back to Spotify.** Now you have a list of popular tracks from Last.fm -- song titles and artist names, nothing more. To add them to a Spotify playlist, you need Spotify track IDs. You search Spotify by name, but the same song might appear as a studio version, a live version, a remaster, a deluxe edition bonus track, or a completely different song with the same name by a different artist. Fuzzy matching handles most of it. But some cases need a human eye.
 
-- **Condition**: any track for the current artist fails exact-enough mapping.
-- **Output**: fatal error + top 5 Spotify candidates per failed track.
-- **Mutation**: run `make record-mapping ...` to store manual mappings.
-- **Re-entry**: rerun `make update-lastfm-explorer-playlist PLAYLIST_NAME="..."`.
+Each bridge is where deterministic code runs out of confidence. And that's exactly where the gates live.
+
+## How the Gates Work
+
+The pipeline runs deterministically as far as it can. When it hits a mapping it can't resolve with confidence, it **stops cold**:
+
+1. It tells you exactly which track failed and why.
+2. It shows you the top 5 closest Spotify candidates (name + ID).
+3. It gives you the exact command to record the correct mapping.
+4. It tells you the exact command to resume.
+
+You (or an AI agent) pick the right candidate, record it, and rerun. The pipeline picks up where it left off, using the mapping you just provided. If another track fails further along, it stops again. Same loop. Repeat until the run completes.
+
+That's the whole pattern: **deterministic code does the bulk work, gates catch the ambiguity, a human or agent resolves it with context, and the same command resumes the pipeline.** It's so simple and so effective that I've applied it to dozens of workflows since this one.
+
+Detailed gate types and contracts: [docs/AGENTIC-FLOW.md](docs/AGENTIC-FLOW.md).
 
 ## Run with an AI Agent (Primary)
 
 The point of this repo is to run the flow with an AI agent. You do one-time setup, then the agent runs the pipeline and handles gate output (fix mappings, rerun) for you.
 
-**Agent runner:** This is configured for **Codex**. Have Codex installed and logged in so it can run in this repo. To use another agent (Cursor, Claude, etc.), the gate output and flow are the same—port the runner; it should work with minimal changes.
+**Agent runner:** This is configured for **Codex**. Have Codex installed and logged in so it can run in this repo. To use another agent (Cursor, Claude, etc.), the gate output and flow are the same -- port the runner; it should work with minimal changes.
 
-**Codex setup (brief):** Install the Codex CLI, log in, and ensure it can execute in this directory. Once that’s done, you’re ready to run the flow with an agent.
+**Codex setup (brief):** Install the Codex CLI, log in, and ensure it can execute in this directory. Once that's done, you're ready to run the flow with an agent.
 
 **One-time setup (you):**
 
 1. Install dependencies: `make install`
-2. Copy env: `cp .env.example .env` and fill in `SPOTIFY_CLIENT_ID`, `SPOTIFY_SECRET_ID`, `LASTFM_API_KEY`, `LASTFM_SHARED_SECRET`
-3. Export env: `set -a && source .env && set +a`
-4. Authenticate: `make auth-interactive`, `make auth-lastfm`, then `LASTFM_TOKEN="..." make auth-lastfm-token` with the callback token
-5. Sync playlists once: `make sync-spotify-playlists`
+2. Create OAuth apps and get credentials: see [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md).
+3. Copy env: `cp .env.example .env` and fill in credentials from step 2.
+4. Export env: `set -a && source .env && set +a`
+5. Authenticate: `make auth-interactive`, `make auth-lastfm`, then `LASTFM_TOKEN="..." make auth-lastfm-token` with the callback token.
+6. Sync playlists once: `make sync-spotify-playlists`
 
 **Run the flow with your agent:** Point your agent at this repo and tell it to run the explorer playlist flow. The agent should:
 
@@ -61,7 +68,7 @@ The point of this repo is to run the flow with an AI agent. You do one-time setu
 2. If the mapping gate triggers, read the gate output (failed tracks + top 5 Spotify candidates), run `make record-mapping ...` for each required mapping, then rerun the same `make update-lastfm-explorer-playlist` command.
 3. Repeat until the run succeeds.
 
-That’s it. The agent does the flow; you get an up-to-date playlist without guessing wrong.
+That's it. The agent does the flow; you get an up-to-date playlist without guessing wrong.
 
 ## Manual Workflow (If You Run Steps Yourself)
 
@@ -70,6 +77,12 @@ If you prefer to run steps by hand instead of with an agent:
 1. Sync playlists: `make sync-spotify-playlists`
 2. Create/update playlist: `make update-lastfm-explorer-playlist PLAYLIST_NAME="Dave's Folk"`
 3. If the gate triggers: run `make record-mapping ...` for each failed track (use the candidate IDs from the gate output), then rerun step 2. Repeat until the run succeeds.
+
+## About This Repo
+
+This code was extracted from a private monorepo, sanitized, and AI-ported for the sake of showing a CAG example. It may be usable -- you're welcome to use it under the MIT license -- but it is not intended (yet) as a ready-to-use, production tool.
+
+**Testing note.** Both Spotify and Last.fm require OAuth apps and active tokens. I did not run a full end-to-end test after setting up fresh OAuth credentials; the flow is trusted to work based on prior use, but verification after a clean OAuth setup has not been done. See [docs/OAUTH-SETUP.md](docs/OAUTH-SETUP.md) for OAuth setup steps.
 
 ## Commands
 
@@ -115,6 +128,7 @@ Optional:
 - `src/token-store.js`: local auth token persistence.
 - `data/` (runtime): playlists cache, Last.fm cache, auth tokens, mappings.
 - `docs/AGENTIC-FLOW.md`: gate contract and loop details.
+- `docs/OAUTH-SETUP.md`: OAuth app creation and auth flow for Spotify and Last.fm.
 
 ## Extending the Example
 
